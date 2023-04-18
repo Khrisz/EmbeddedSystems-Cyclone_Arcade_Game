@@ -496,3 +496,12 @@ int readScoreEEPROM(int rank) {
 
   return EEPROM.read(rank - 1);
 }
+
+// resets EEPROM values 0 - 14
+void resetScoresEEPROM() {
+
+  for (int i = 0; i < 15; i++) 
+  {
+    EEPROM.write(i, 0);
+  }
+}

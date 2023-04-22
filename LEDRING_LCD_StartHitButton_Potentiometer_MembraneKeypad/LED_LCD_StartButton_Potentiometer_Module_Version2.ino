@@ -15,6 +15,9 @@ const byte COLS = 4; //four columns
 
 int currentState1;
 
+volatile int value = 0;
+volatile bool resetScores = false;
+
 char keys[ROWS][COLS] = {
   {'1','2','3','A'},
   {'4','5','6','B'},
@@ -57,7 +60,7 @@ int startHitPin = 2;          //Source for INT0, Used for starting a game and th
 int playerScore = 0;          //Tracks User's score
 int currentLevel = 1;
 bool readyToCheck = true;
-unsigned long gameTimeStart, newTime, timePressed = 0;  //Used for keeping track of when the player started a game
+volatile unsigned long gameTimeStart, previousInterruptTime, currentInterruptTime = 0;  //Used for keeping track of when the player started a game
 
 
 char topScores[3][10] = { "BLU: 20", "RRR: 18", "OYY: 17"}; //USED FOR TESTING PURPOSES, Will be replaced by what is returned after a game ends
@@ -75,7 +78,8 @@ int currentScoreIndex = 1;                  //Used to cycle through 3 top scores
 int lastState1;
 
 void setup() {
-  Serial.begin(9600);                        //Used for testing
+  usart_init();
+  //Serial.begin(9600);                        //Used for testing
   startTime = millis();                    //Save to start tracking when UNO was turned on and cycle through top 3 scores every 1 second
   FastLED.addLeds<NEOPIXEL, pin4>(leds, NumberOfLEDs);       //SetUp LED ring
   currentState1 = digitalRead(startHitPin);
@@ -100,9 +104,11 @@ void setup() {
 
 /////////Module Code
   /* //Do only once on a microController for initial EEPROM setup: initializes all EEPROM addresses to 0*/
+  /*
   for (int i = 0; i < EEPROM.length(); i++) {
     EEPROM.write(i, 0);
   }
+  */
 
 /////////Module Code
 }
@@ -167,6 +173,13 @@ void loop() {
   }
   if(!gameStarted){ // Inital State, Waiting for a player to hit the start button
   //Serial.println( "Game Not started");
+    // check if score reset has been requested
+    if (resetScores) 
+    {
+      resetScoresEEPROM();
+      resetScores = false;
+    }
+
     for (int i = NumberOfLEDs-1; i >= 0; i--)
       {
         leds[i] = CRGB::Black;  //Turns off all the leds
@@ -223,7 +236,7 @@ void loop() {
         startTime = millis();                     //Reset the start time
      }
   } else if(gameStarted){
-   newTime = millis();
+   //newTime = millis();
     //Below for actual playing mode
     for (int i = 0; i < NumberOfLEDs; i++)
       {
@@ -241,8 +254,8 @@ void loop() {
 }
 
 void startHitISR() {
-  timePressed = millis();
-if(newTime - timePressed > 50) { 
+  currentInterruptTime = millis();
+if(currentInterruptTime - previousInterruptTime > 50) { 
   //readyToCheck = false;
   //timePressed = millis();
   if(!gameStarted && isScoringState == false){
@@ -295,9 +308,11 @@ if(newTime - timePressed > 50) {
       playerScore = playerScore + pointsDifficulty;
     }        
     //Send 1 to Slave Arduino
-    Serial.write(1);       //send '1', turn on
+    //Serial.write(1);       //send '1', turn on
+    usart_send(1);
   }
 }
+previousInterruptTime = currentInterruptTime;
 //readyToCheck = true;
 }
 
@@ -335,7 +350,8 @@ ISR(TIMER1_OVF_vect){  //Vector Timer1 overflow
       ////
 
       //Send 0 to slave arduino
-      Serial.write(0);
+      //Serial.write(0);
+      usart_send(0);
     }
   }
 }
@@ -505,3 +521,31 @@ void resetScoresEEPROM() {
     EEPROM.write(i, 0);
   }
 }
+
+void usart_init() {
+  DDRB = 0xFF; //Port B is output
+  UCSR0B = (1<<RXEN0) | (1<<TXEN0);
+  UCSR0B |= (1 << RXCIE0); //enable interrupt on RXC0 flag
+  UCSR0C = (1<<UCSZ01) | (1<<UCSZ00);
+  //baud rate = 9600
+  UBRR0L = 103;
+}
+
+ISR(USART_RX_vect) {
+  while (! (UCSR0A & (1<<RXC0)));
+
+    value = UDR0; //integer received from transmitter
+
+    if(value == 1) {
+      resetScores = true;
+      value = 0;
+    }
+}
+
+void usart_send (unsigned char ch) {
+  while (! (UCSR0A & (1<<UDRE0)));
+
+    //wait until UDR0 is empty
+  UDR0 = ch; //transmit ch
+}
+

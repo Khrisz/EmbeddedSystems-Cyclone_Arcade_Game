@@ -3,17 +3,16 @@
 #include <avr/interrupt.h>
 #include "pitches.h"
 
-int redLED = 8;
-int buzzer = 13;
 unsigned long timeBuzzer0;
 unsigned long timeBuzzer1;
 volatile int value = 0;
 
 #define joyX A0
 #define joyY A1
-#define BUZZER_PIN 5
+#define buzzerPin 5
 #define REST 0
 #define alarm_pin 13
+#define resetPin 3
 #define END -1
 
 // Selection of songs
@@ -145,8 +144,10 @@ void setup() {
   // put your setup code here, to run once:
   vol.begin();
   usart_init();
-//  pinMode(redLED, OUTPUT);
-  pinMode(buzzer, OUTPUT);
+
+  pinMode(buzzerPin, OUTPUT);
+  pinMode(resetPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(resetPin), resetHitISR, RISING);
   
 }
 
@@ -156,7 +157,7 @@ void loop() {
    for (int i = 0; melodies[trackIndex][i] != -1; i++) {
 
     if(millis() - timeBuzzer1 >= 250){
-      noTone(buzzer); 
+      noTone(buzzerPin); 
     }
 
     int noteDuration = speeds[trackIndex] * durations[trackIndex][i];
@@ -201,8 +202,8 @@ void loop() {
 }
 
 void usart_init() {
-  DDRB = 0xFF; //Port B is output
-  UCSR0B = (1<<RXEN0);
+  // DDRB = 0xFF; //Port B is output
+  UCSR0B = (1<<RXEN0) | (1<<TXEN0);
   UCSR0B |= (1 << RXCIE0); //enable interrupt on RXC0 flag
   UCSR0C = (1<<UCSZ01) | (1<<UCSZ00);
   //baud rate = 9600
@@ -217,14 +218,20 @@ ISR(USART_RX_vect) {
     // turn led on/off based on integer received
     if (value == 1) 
     {
-      digitalWrite(redLED, HIGH);
-      tone(buzzer, 500); 
+      tone(buzzerPin, 500); 
       timeBuzzer1 = millis();
     }
     else if (value == 0) 
     {
-      digitalWrite(redLED, LOW);
-      tone(buzzer, 1000);
+      tone(buzzerPin, 1000);
       timeBuzzer1 = millis();
     }
 }
+
+void resetHitISR() {
+  // send a 1
+  UDR0 = 1;
+}
+
+
+

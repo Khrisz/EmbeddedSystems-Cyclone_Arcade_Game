@@ -1,3 +1,7 @@
+/*
+This program controls the music system and reset button 
+*/
+
 #include <avr/io.h>
 #include <Volume.h>
 #include <avr/interrupt.h>
@@ -9,11 +13,11 @@ volatile int value = 0;
 
 #define joyX A0
 #define joyY A1
-#define buzzerPin 5
-#define REST 0
-#define alarm_pin 13
+#define musicPin 5
+#define buzzerPin 13
 #define resetPin 3
 #define END -1
+#define REST 0
 
 // Selection of songs
 int melodies[2][220] = {
@@ -72,6 +76,7 @@ int melodies[2][220] = {
   }
 };
 
+// Note durations for respective songs
 int durations[2][220] = 
   {
   
@@ -141,11 +146,10 @@ int trackIndex = 0;
 
 
 void setup() {
-  // put your setup code here, to run once:
   vol.begin();
   usart_init();
 
-  pinMode(buzzerPin, OUTPUT);
+  pinMode(musicPin, OUTPUT);
   pinMode(resetPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(resetPin), resetHitISR, RISING);
   
@@ -157,7 +161,7 @@ void loop() {
    for (int i = 0; melodies[trackIndex][i] != -1; i++) {
 
     if(millis() - timeBuzzer1 >= 250){
-      noTone(buzzerPin); 
+      noTone(musicPin); 
     }
 
     int noteDuration = speeds[trackIndex] * durations[trackIndex][i];
@@ -193,9 +197,6 @@ void loop() {
       trackIndex = (trackIndex + 1) % 2;
       i = 0;
     }
-
-    
-
   }
 
   delay(3000);
@@ -228,8 +229,9 @@ ISR(USART_RX_vect) {
     }
 }
 
+
 void resetHitISR() {
-  // send a 1
+  // send a 1 to cause a reset
   UDR0 = 1;
 }
 
